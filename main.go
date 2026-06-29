@@ -1,4 +1,3 @@
-// ferret v. 0.0.2
 package main
 
 import (
@@ -14,11 +13,17 @@ import (
 var procRoot = "/proc"
 
 type Process struct {
-	PID  int
-	Comm string
+	PID      int
+	Comm     string
+	State    byte
+	Priority int
+	Nice     int
+
+	vszBytes uint64
+	rssBytes uint64
 }
 
-// read /proc/[pid]/stat to obtain comm (the filename of the executable)
+// read /proc/[pid]/stat; return filled Process struct
 func getProcessInfo(pid int) (Process, error) {
 	statPath := filepath.Join(procRoot, strconv.Itoa(pid), "stat")
 	data, err := os.ReadFile(statPath)
@@ -35,9 +40,36 @@ func getProcessInfo(pid int) (Process, error) {
 		return Process{}, errors.New("incorrect stat format")
 	}
 
+	processStats := strings.Fields(statStr[rParen+1:])
+
+	processPriority, err := strconv.Atoi(processStats[15])
+	if err != nil {
+		return Process{}, errors.New("incorrect stat format")
+	}
+
+	processNice, err := strconv.Atoi(processStats[16])
+	if err != nil {
+		return Process{}, errors.New("incorrect stat format")
+	}
+
+	processVSZ, err := strconv.Atoi(processStats[20])
+	if err != nil {
+		return Process{}, errors.New("incorrect stat format")
+	}
+
+	processRSS, err := strconv.Atoi(processStats[21])
+	if err != nil {
+		return Process{}, errors.New("incorrect stat format")
+	}
+
 	return Process{
-		PID:  pid,
-		Comm: statStr[lParen+1 : rParen],
+		PID:      pid,
+		Comm:     statStr[lParen+1 : rParen],
+		State:    processStats[0][0],
+		Priority: processPriority,
+		vszBytes: uint64(processVSZ),
+		rssBytes: uint64(processRSS) * uint64(os.Getpagesize()),
+		Nice:     processNice,
 	}, nil
 }
 
@@ -67,7 +99,7 @@ func main() {
 			log.Fatalf("could not read process stat: %v", err)
 		}
 
-		fmt.Printf("Process %d: %s\n", process.PID, process.Comm)
+		fmt.Printf("Process %d: %s;\t\t State:%q Priority:%d Nice:%d; \t\t Virtual memory size (B):%d Resident Memory size (B):%d \n", process.PID, process.Comm, process.State, process.Priority, process.Nice, process.vszBytes, process.rssBytes)
 		processList = append(processList, process)
 	}
 
