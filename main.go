@@ -36,8 +36,10 @@ func main() {
 			log.Fatalf("could not read process stat: %v", err)
 		}
 
-		fmt.Printf("Process %d: %s;\t\t State:%q Priority:%d Nice:%d; \t\t Virtual memory size (B):%d Resident Memory size (B):%d \n",
-			process.PID, process.Comm, process.State, process.Priority, process.Nice, process.VSZBytes, process.RSSBytes)
+		fmt.Printf("Process %d: %s:\n", process.PID, process.Comm)
+		fmt.Printf("\t├─ State:%q  Priority:%d  Nice:%d\n", process.State, process.Priority, process.Nice)
+		fmt.Printf("\t├─ Virtual memory size (B):%d  Resident Memory size (B):%d\n", process.VSZBytes, process.RSSBytes)
+		fmt.Printf("\t└─ User mode time (s):%.2f  Kernel mode time (s):%.2f\n", ticksToSeconds(float64(process.UTimeTicks)), ticksToSeconds(float64(process.STimeTicks)))
 		processList = append(processList, process)
 	}
 
