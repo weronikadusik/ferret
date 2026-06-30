@@ -1,4 +1,4 @@
-package main
+package procfs
 
 import (
 	"errors"
@@ -6,40 +6,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-
-	"github.com/tklauser/go-sysconf"
 )
 
-type Process struct {
-	PID      int
-	Comm     string
-	State    byte
-	Priority int
-	Nice     int
-
-	VSZBytes uint64
-	RSSBytes uint64
-
-	UTimeTicks uint64
-	STimeTicks uint64
-}
-
-// clkTck is the number of clock ticks per second used by the kernel to track CPU time
-var clkTck = func() int64 {
-	clkTck, err := sysconf.Sysconf(sysconf.SC_CLK_TCK)
-	if err != nil {
-		return 100
-	}
-	return clkTck
-}()
-
-// ticksToSeconds converts CPU ticks to seconds
-func ticksToSeconds(ticks float64) float64 {
-	return ticks / float64(clkTck)
-}
-
-// read /proc/[pid]/stat; return filled Process struct
-func getProcessInfo(procRoot string, pid int) (Process, error) {
+// ReadProcessStat reads /proc/[pid]/stat and returns filled Process struct
+func ReadProcessStat(procRoot string, pid int) (Process, error) {
 	statPath := filepath.Join(procRoot, strconv.Itoa(pid), "stat")
 	data, err := os.ReadFile(statPath)
 	if err != nil {

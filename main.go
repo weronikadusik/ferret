@@ -5,30 +5,25 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
+
+	"github.com/weronikadusik/ferret/procfs"
 )
 
 const procRoot = "/proc"
 
 func main() {
-	var processList []Process
+	var PIDs []int
+	var processList []procfs.Process
 
 	fmt.Println("Hi! I'm ferret 🦦")
 
-	// read proc directory, to obtain a list of processes
-	processDir, err := os.ReadDir(procRoot)
+	PIDs, err := procfs.ListPIDs(procRoot)
 	if err != nil {
 		log.Fatalf("could not read process list: %v", err)
 	}
 
-	// filter out non-numeric directory names, so only process-specific ones remain
-	for _, f := range processDir {
-		pid, err := strconv.Atoi(f.Name())
-		if err != nil {
-			continue
-		}
-
-		process, err := getProcessInfo(procRoot, pid)
+	for _, pid := range PIDs {
+		process, err := procfs.ReadProcessStat(procRoot, pid)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) || errors.Is(err, os.ErrPermission) {
 				continue // process exited between reading proc directory and reading process-specific stat, or access denied
