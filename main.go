@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/weronikadusik/ferret/procfs"
 )
@@ -38,5 +39,30 @@ func main() {
 		processList = append(processList, process)
 	}
 
-	fmt.Printf("%d processes found\n", len(processList))
+	fmt.Printf("%d processes found\n\n", len(processList))
+
+	cpuTimesStart, err := procfs.ReadStat(procRoot)
+	if err != nil {
+		log.Fatalf("could not parse CPU statistics: %v", err)
+	}
+
+	time.Sleep(time.Second)
+
+	cpuTimesStop, err := procfs.ReadStat(procRoot)
+	if err != nil {
+		log.Fatalf("could not parse CPU statistics: %v", err)
+	}
+
+	deltas := CPUStatDelta(cpuTimesStart.Total, cpuTimesStop.Total)
+
+	fmt.Printf("CPU Deltas\n")
+	fmt.Printf("--------------\n")
+	fmt.Printf("User: %d\n", deltas.User)
+	fmt.Printf("Nice: %d\n", deltas.Nice)
+	fmt.Printf("System: %d\n", deltas.System)
+	fmt.Printf("Idle: %d\n", deltas.Idle)
+	fmt.Printf("IO Wait: %d\n", deltas.IOWait)
+	fmt.Printf("IRQ: %d\n", deltas.IRQ)
+	fmt.Printf("Soft IRQ: %d\n", deltas.SoftIRQ)
+	fmt.Printf("Steal: %d\n", deltas.Steal)
 }
