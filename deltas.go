@@ -15,3 +15,15 @@ func CPUStatDelta(before, after procfs.CPUStat) procfs.CPUStat {
 		Steal:   after.Steal - before.Steal,
 	}
 }
+
+// CPUUsage returns the average CPU utilisation percentage from a procfs.CPUStat containing cpu time deltas
+func CPUUsage(deltas procfs.CPUStat) float64 {
+	total := deltas.User + deltas.Nice + deltas.System + deltas.Idle + deltas.IOWait + deltas.IRQ + deltas.SoftIRQ + deltas.Steal
+	busy := deltas.User + deltas.Nice + deltas.System + deltas.IRQ + deltas.SoftIRQ + deltas.Steal
+
+	if total == 0 {
+		return 0.0
+	}
+
+	return (float64(busy) / float64(total)) * 100.0
+}

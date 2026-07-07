@@ -54,15 +54,7 @@ func main() {
 	}
 
 	deltas := CPUStatDelta(cpuTimesStart.Total, cpuTimesStop.Total)
+	cpuUsage := CPUUsage(deltas)
 
-	fmt.Printf("CPU Deltas\n")
-	fmt.Printf("--------------\n")
-	fmt.Printf("User: %d\n", deltas.User)
-	fmt.Printf("Nice: %d\n", deltas.Nice)
-	fmt.Printf("System: %d\n", deltas.System)
-	fmt.Printf("Idle: %d\n", deltas.Idle)
-	fmt.Printf("IO Wait: %d\n", deltas.IOWait)
-	fmt.Printf("IRQ: %d\n", deltas.IRQ)
-	fmt.Printf("Soft IRQ: %d\n", deltas.SoftIRQ)
-	fmt.Printf("Steal: %d\n", deltas.Steal)
+	fmt.Printf("System CPU Usage: %.1f%%\n", cpuUsage)
 }
