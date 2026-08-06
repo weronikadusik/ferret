@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/weronikadusik/ferret/procfs"
@@ -12,49 +13,99 @@ import (
 
 const procRoot = "/proc"
 
-func main() {
-	var PIDs []int
-	var processList []procfs.Process
+type Snapshot struct {
+	Processes map[int]procfs.Process
+	CPUTimes  procfs.SystemStat
+}
 
-	fmt.Println("Hi! I'm ferret 🦦")
-
-	PIDs, err := procfs.ListPIDs(procRoot)
+func readSnapshot() (Snapshot, error) {
+	Processes, err := readProcesses()
 	if err != nil {
-		log.Fatalf("could not read process list: %v", err)
+		return Snapshot{}, err
 	}
 
-	for _, pid := range PIDs {
-		process, err := procfs.ReadProcessStat(procRoot, pid)
+	CPUTimes, err := procfs.ReadStat(procRoot)
+	if err != nil {
+		return Snapshot{}, err
+	}
+
+	return Snapshot{
+		Processes: Processes,
+		CPUTimes:  CPUTimes,
+	}, nil
+}
+
+func readProcesses() (map[int]procfs.Process, error) {
+	pids, err := procfs.ListPIDs(procRoot)
+	if err != nil {
+		return nil, fmt.Errorf("listing PIDs: %w", err)
+	}
+
+	Processes := make(map[int]procfs.Process, len(pids))
+	for _, pid := range pids {
+		proc, err := procfs.ReadProcessStat(procRoot, pid)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) || errors.Is(err, os.ErrPermission) {
 				continue // process exited between reading proc directory and reading process-specific stat, or access denied
 			}
-			log.Fatalf("could not read process stat: %v", err)
+			return nil, fmt.Errorf("reading stat for pid %d: %w", pid, err)
 		}
-
-		fmt.Printf("Process %d: %s:\n", process.PID, process.Comm)
-		fmt.Printf("\t├─ State:%q  Priority:%d  Nice:%d\n", process.State, process.Priority, process.Nice)
-		fmt.Printf("\t├─ Virtual memory size (B):%d  Resident Memory size (B):%d\n", process.VSZBytes, process.RSSBytes)
-		fmt.Printf("\t└─ User mode time (s):%.2f  Kernel mode time (s):%.2f\n", ticksToSeconds(float64(process.UTimeTicks)), ticksToSeconds(float64(process.STimeTicks)))
-		processList = append(processList, process)
+		Processes[pid] = proc
 	}
+	return Processes, nil
+}
 
-	fmt.Printf("%d processes found\n\n", len(processList))
+func main() {
+	fmt.Println("Hi! I'm ferret 🦦")
 
-	cpuTimesStart, err := procfs.ReadStat(procRoot)
+	snapshotStart, err := readSnapshot()
 	if err != nil {
-		log.Fatalf("could not parse CPU statistics: %v", err)
+		log.Fatalf("could not get initial snapshot: %v", err)
 	}
 
 	time.Sleep(time.Second)
 
-	cpuTimesStop, err := procfs.ReadStat(procRoot)
+	snapshotStop, err := readSnapshot()
 	if err != nil {
-		log.Fatalf("could not parse CPU statistics: %v", err)
+		log.Fatalf("could not get final snapshot: %v", err)
 	}
 
-	deltas := CPUStatDelta(cpuTimesStart.Total, cpuTimesStop.Total)
+	deltas := CPUStatDelta(snapshotStart.CPUTimes.Total, snapshotStop.CPUTimes.Total)
 	cpuUsage := CPUUsage(deltas)
 
+	systemTicksDelta := TotalTicks(deltas)
+
+	cpuUsageByPID := make(map[int]float64, len(snapshotStop.Processes))
+	for pid, process := range snapshotStop.Processes {
+		start, exists := snapshotStart.Processes[pid]
+		if !exists {
+			continue // process was created during the sleep window
+		}
+
+		startTicks := start.UTimeTicks + start.STimeTicks
+		stopTicks := process.UTimeTicks + process.STimeTicks
+		if stopTicks < startTicks || systemTicksDelta == 0 {
+			continue
+		}
+
+		procTicksDelta := stopTicks - startTicks
+		cpuUsageByPID[pid] = (float64(procTicksDelta) / float64(systemTicksDelta)) * 100.0
+	}
+
+	pids := make([]int, 0, len(cpuUsageByPID))
+	for pid := range cpuUsageByPID {
+		pids = append(pids, pid)
+	}
+	sort.Slice(pids, func(i, j int) bool { return cpuUsageByPID[pids[i]] > cpuUsageByPID[pids[j]] })
+
+	for _, pid := range pids {
+		process := snapshotStop.Processes[pid]
+		fmt.Printf("Process %d: %s:\n", process.PID, process.Comm)
+		fmt.Printf("\t├─ State:%q  Priority:%d  Nice:%d\n", process.State, process.Priority, process.Nice)
+		fmt.Printf("\t├─ Virtual memory size (B):%d  Resident Memory size (B):%d\n", process.VSZBytes, process.RSSBytes)
+		fmt.Printf("\t└─ CPU Usage: %.2f%%\n", cpuUsageByPID[pid])
+	}
+
+	fmt.Printf("%d Processes found\n\n", len(snapshotStop.Processes))
 	fmt.Printf("System CPU Usage: %.1f%%\n", cpuUsage)
 }

@@ -2,6 +2,12 @@ package main
 
 import "github.com/weronikadusik/ferret/procfs"
 
+// TotalTicks calculates the total system ticks across all CPU states for a given stat struct
+func TotalTicks(stat procfs.CPUStat) uint64 {
+	return stat.User + stat.Nice + stat.System + stat.Idle +
+		stat.IOWait + stat.IRQ + stat.SoftIRQ + stat.Steal
+}
+
 // CPUStatDelta returns the difference between two CPU samples
 func CPUStatDelta(before, after procfs.CPUStat) procfs.CPUStat {
 	return procfs.CPUStat{
