@@ -71,9 +71,15 @@ func main() {
 	}
 
 	deltas := CPUStatDelta(snapshotStart.CPUTimes.Total, snapshotStop.CPUTimes.Total)
-	cpuUsage := CPUUsage(deltas)
-
 	systemTicksDelta := TotalTicks(deltas)
+	cpuUsageTotal := CPUUsage(deltas)
+
+	cpuUsagePerCPU := make([]float64, len(snapshotStop.CPUTimes.PerCPU))
+	for i, cpu := range snapshotStop.CPUTimes.PerCPU {
+		cpuUsagePerCPU[i] = CPUUsage(
+			CPUStatDelta(snapshotStart.CPUTimes.PerCPU[i], cpu),
+		)
+	}
 
 	cpuUsageByPID := make(map[int]float64, len(snapshotStop.Processes))
 	for pid, process := range snapshotStop.Processes {
@@ -107,5 +113,10 @@ func main() {
 	}
 
 	fmt.Printf("%d Processes found\n\n", len(snapshotStop.Processes))
-	fmt.Printf("System CPU Usage: %.1f%%\n", cpuUsage)
+	fmt.Print("System CPU Usage:\n")
+
+	for i, cpuUsage := range cpuUsagePerCPU {
+		fmt.Printf("\t├─ CPU %d: %.1f%%\n", i, cpuUsage)
+	}
+	fmt.Printf("\t└─ Total: %.1f%%\n", cpuUsageTotal)
 }

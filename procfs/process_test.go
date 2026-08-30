@@ -112,7 +112,7 @@ func TestReadStat(t *testing.T) {
 					SoftIRQ: 9612,
 					Steal:   0,
 				},
-				PerCore: []CPUStat{
+				PerCPU: []CPUStat{
 					{
 						User:    72398,
 						Nice:    440,

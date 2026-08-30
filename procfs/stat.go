@@ -9,8 +9,8 @@ import (
 )
 
 type SystemStat struct {
-	Total   CPUStat
-	PerCore []CPUStat
+	Total  CPUStat
+	PerCPU []CPUStat
 }
 
 type CPUStat struct {
@@ -108,7 +108,7 @@ func ReadStat(procRoot string) (SystemStat, error) {
 	}
 
 	return SystemStat{
-		Total:   total,
-		PerCore: cpuStat,
+		Total:  total,
+		PerCPU: cpuStat,
 	}, nil
 }
