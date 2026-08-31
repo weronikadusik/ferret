@@ -104,6 +104,11 @@ func main() {
 	}
 	sort.Slice(pids, func(i, j int) bool { return cpuUsageByPID[pids[i]] > cpuUsageByPID[pids[j]] })
 
+	memoryUsage, err := procfs.ReadMemInfo(procRoot)
+	if err != nil {
+		log.Fatalf("could not get memory usage info: %v", err)
+	}
+
 	for _, pid := range pids {
 		process := snapshotStop.Processes[pid]
 		fmt.Printf("Process %d: %s:\n", process.PID, process.Comm)
@@ -118,5 +123,8 @@ func main() {
 	for i, cpuUsage := range cpuUsagePerCPU {
 		fmt.Printf("\t├─ CPU %d: %.1f%%\n", i, cpuUsage)
 	}
-	fmt.Printf("\t└─ Total: %.1f%%\n", cpuUsageTotal)
+	fmt.Printf("\t└─ Total: %.1f%%\n\n", cpuUsageTotal)
+
+	fmt.Printf("System Memory Usage: %.1f/%.1f GB\n", KBtoGB(memoryUsage.InUseKB), KBtoGB(memoryUsage.TotalKB))
+	fmt.Printf("Memory Available: %.1f GB\n", KBtoGB(memoryUsage.AvailableKB))
 }
