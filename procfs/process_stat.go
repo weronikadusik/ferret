@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// ReadProcessStat reads /proc/[pid]/stat and returns filled Process struct
+// ReadProcessStat reads /proc/[pid]/stat and returns a Process
 func ReadProcessStat(procRoot string, pid int) (Process, error) {
 	statPath := filepath.Join(procRoot, strconv.Itoa(pid), "stat")
 	data, err := os.ReadFile(statPath)

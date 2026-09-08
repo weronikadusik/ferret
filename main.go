@@ -42,7 +42,7 @@ func readProcesses() (map[int]procfs.Process, error) {
 		return nil, fmt.Errorf("listing PIDs: %w", err)
 	}
 
-	Processes := make(map[int]procfs.Process, len(pids))
+	processes := make(map[int]procfs.Process, len(pids))
 	for _, pid := range pids {
 		proc, err := procfs.ReadProcessStat(procRoot, pid)
 		if err != nil {
@@ -60,41 +60,41 @@ func readProcesses() (map[int]procfs.Process, error) {
 			return nil, fmt.Errorf("reading smaps_rollup for pid %d: %w", pid, err)
 		}
 
-		proc.Private = privateMemoryUsage
-		Processes[pid] = proc
+		proc.PrivateKB = privateMemoryUsage
+		processes[pid] = proc
 	}
-	return Processes, nil
+	return processes, nil
 }
 
 func main() {
 	fmt.Println("Hi! I'm ferret 🦦")
 
-	snapshotStart, err := readSnapshot()
+	before, err := readSnapshot()
 	if err != nil {
 		log.Fatalf("could not get initial snapshot: %v", err)
 	}
 
 	time.Sleep(time.Second)
 
-	snapshotStop, err := readSnapshot()
+	after, err := readSnapshot()
 	if err != nil {
 		log.Fatalf("could not get final snapshot: %v", err)
 	}
 
-	deltas := CPUStatDelta(snapshotStart.CPUTimes.Total, snapshotStop.CPUTimes.Total)
+	deltas := CPUStatDelta(before.CPUTimes.Total, after.CPUTimes.Total)
 	systemTicksDelta := TotalTicks(deltas)
 	cpuUsageTotal := CPUUsage(deltas)
 
-	cpuUsagePerCPU := make([]float64, len(snapshotStop.CPUTimes.PerCPU))
-	for i, cpu := range snapshotStop.CPUTimes.PerCPU {
+	cpuUsagePerCPU := make([]float64, len(after.CPUTimes.PerCPU))
+	for i, cpu := range after.CPUTimes.PerCPU {
 		cpuUsagePerCPU[i] = CPUUsage(
-			CPUStatDelta(snapshotStart.CPUTimes.PerCPU[i], cpu),
+			CPUStatDelta(before.CPUTimes.PerCPU[i], cpu),
 		)
 	}
 
-	cpuUsageByPID := make(map[int]float64, len(snapshotStop.Processes))
-	for pid, process := range snapshotStop.Processes {
-		start, exists := snapshotStart.Processes[pid]
+	cpuUsageByPID := make(map[int]float64, len(after.Processes))
+	for pid, process := range after.Processes {
+		start, exists := before.Processes[pid]
 		if !exists {
 			continue // process was created during the sleep window
 		}
@@ -121,15 +121,15 @@ func main() {
 	}
 
 	for _, pid := range pids {
-		process := snapshotStop.Processes[pid]
+		process := after.Processes[pid]
 		fmt.Printf("Process %d: %s:\n", process.PID, process.Comm)
 		fmt.Printf("\t├─ State:%q  Priority:%d  Nice:%d\n", process.State, process.Priority, process.Nice)
 		fmt.Printf("\t├─ Virtual memory size (B):%d  Resident Memory size (B):%d\n", process.VSZBytes, process.RSSBytes)
-		fmt.Printf("\t├─ Private memory usage: %d KB\n", process.Private)
+		fmt.Printf("\t├─ Private memory usage: %d KB\n", process.PrivateKB)
 		fmt.Printf("\t└─ CPU Usage: %.2f%%\n", cpuUsageByPID[pid])
 	}
 
-	fmt.Printf("%d Processes found\n\n", len(snapshotStop.Processes))
+	fmt.Printf("%d Processes found\n\n", len(after.Processes))
 	fmt.Print("System CPU Usage:\n")
 
 	for i, cpuUsage := range cpuUsagePerCPU {

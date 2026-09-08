@@ -9,6 +9,7 @@ import (
 	"strings"
 )
 
+// ReadProcessPrivateMemoryUsage reads /proc/[pid]/smaps_rollup and returns the sum of Private_Clean and Private_Dirty memory.
 func ReadProcessPrivateMemoryUsage(procRoot string, pid int) (uint64, error) {
 	smapsPath := filepath.Join(procRoot, strconv.Itoa(pid), "smaps_rollup")
 	file, err := os.Open(smapsPath)
