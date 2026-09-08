@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"sort"
+	"syscall"
 	"time"
 
 	"github.com/weronikadusik/ferret/procfs"
@@ -50,6 +51,16 @@ func readProcesses() (map[int]procfs.Process, error) {
 			}
 			return nil, fmt.Errorf("reading stat for pid %d: %w", pid, err)
 		}
+
+		privateMemoryUsage, err := procfs.ReadProcessPrivateMemoryUsage(procRoot, pid)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) || errors.Is(err, os.ErrPermission) || errors.Is(err, syscall.ESRCH) {
+				continue // process exited between reading proc directory and reading process-specific stat, or access denied
+			}
+			return nil, fmt.Errorf("reading smaps_rollup for pid %d: %w", pid, err)
+		}
+
+		proc.Private = privateMemoryUsage
 		Processes[pid] = proc
 	}
 	return Processes, nil
@@ -114,6 +125,7 @@ func main() {
 		fmt.Printf("Process %d: %s:\n", process.PID, process.Comm)
 		fmt.Printf("\t├─ State:%q  Priority:%d  Nice:%d\n", process.State, process.Priority, process.Nice)
 		fmt.Printf("\t├─ Virtual memory size (B):%d  Resident Memory size (B):%d\n", process.VSZBytes, process.RSSBytes)
+		fmt.Printf("\t├─ Private memory usage: %d KB\n", process.Private)
 		fmt.Printf("\t└─ CPU Usage: %.2f%%\n", cpuUsageByPID[pid])
 	}
 
