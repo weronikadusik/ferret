@@ -41,12 +41,12 @@ func ReadProcessStat(procRoot string, pid int) (Process, error) {
 		return Process{}, errors.New("incorrect stat format")
 	}
 
-	processVSZ, err := strconv.Atoi(processStats[20])
+	processVSZ, err := strconv.ParseUint(processStats[20], 10, 64)
 	if err != nil {
 		return Process{}, errors.New("incorrect stat format")
 	}
 
-	processRSS, err := strconv.Atoi(processStats[21])
+	processRSS, err := strconv.ParseUint(processStats[21], 10, 64)
 	if err != nil {
 		return Process{}, errors.New("incorrect stat format")
 	}
@@ -67,8 +67,8 @@ func ReadProcessStat(procRoot string, pid int) (Process, error) {
 		State:      processStats[0][0],
 		Priority:   processPriority,
 		Nice:       processNice,
-		VSZBytes:   uint64(processVSZ),
-		RSSBytes:   uint64(processRSS) * uint64(os.Getpagesize()),
+		VSZBytes:   processVSZ,
+		RSSBytes:   processRSS * uint64(os.Getpagesize()),
 		UTimeTicks: processUTime,
 		STimeTicks: processSTime,
 	}, nil
