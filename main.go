@@ -71,10 +71,28 @@ func readProcesses() (map[int]procfs.Process, error) {
 	return processes, nil
 }
 
-func calculateSystemCPUUsage(before Snapshot, after Snapshot) CPUUsage {
-	deltas := CPUStatDelta(before.CPUStats.Total, after.CPUStats.Total)
-	cpuUsageTotal := CPUUtilisation(deltas)
+func calculateCPUUsageByPID(before Snapshot, after Snapshot, systemTicksDelta uint64) map[int]float64 {
+	cpuUsageByPID := make(map[int]float64, len(after.Processes))
+	for pid, process := range after.Processes {
+		start, exists := before.Processes[pid]
+		if !exists {
+			continue // process was created during the sleep window
+		}
 
+		startTicks := start.UTimeTicks + start.STimeTicks
+		stopTicks := process.UTimeTicks + process.STimeTicks
+		if stopTicks < startTicks || systemTicksDelta == 0 {
+			continue
+		}
+
+		procTicksDelta := stopTicks - startTicks
+		cpuUsageByPID[pid] = (float64(procTicksDelta) / float64(systemTicksDelta)) * 100.0
+	}
+
+	return cpuUsageByPID
+}
+
+func calculateSystemCPUUsage(before Snapshot, after Snapshot, totalDelta procfs.CPUTimes) CPUUsage {
 	cpuUsagePerCPU := make([]float64, len(after.CPUStats.PerCPU))
 	for i, cpu := range after.CPUStats.PerCPU {
 		cpuUsagePerCPU[i] = CPUUtilisation(
@@ -83,7 +101,7 @@ func calculateSystemCPUUsage(before Snapshot, after Snapshot) CPUUsage {
 	}
 
 	return CPUUsage{
-		Total:  cpuUsageTotal,
+		Total:  CPUUtilisation(totalDelta),
 		PerCPU: cpuUsagePerCPU,
 	}
 }
@@ -103,26 +121,11 @@ func main() {
 		log.Fatalf("could not get final snapshot: %v", err)
 	}
 
-	cpuUsage := calculateSystemCPUUsage(before, after)
+	totalDelta := CPUStatDelta(before.CPUStats.Total, after.CPUStats.Total)
+	systemTicksDelta := TotalTicks(totalDelta)
 
-	deltas := CPUStatDelta(before.CPUStats.Total, after.CPUStats.Total)
-	systemTicksDelta := TotalTicks(deltas)
-	cpuUsageByPID := make(map[int]float64, len(after.Processes))
-	for pid, process := range after.Processes {
-		start, exists := before.Processes[pid]
-		if !exists {
-			continue // process was created during the sleep window
-		}
-
-		startTicks := start.UTimeTicks + start.STimeTicks
-		stopTicks := process.UTimeTicks + process.STimeTicks
-		if stopTicks < startTicks || systemTicksDelta == 0 {
-			continue
-		}
-
-		procTicksDelta := stopTicks - startTicks
-		cpuUsageByPID[pid] = (float64(procTicksDelta) / float64(systemTicksDelta)) * 100.0
-	}
+	cpuUsage := calculateSystemCPUUsage(before, after, totalDelta)
+	cpuUsageByPID := calculateCPUUsageByPID(before, after, systemTicksDelta)
 
 	pids := make([]int, 0, len(cpuUsageByPID))
 	for pid := range cpuUsageByPID {
