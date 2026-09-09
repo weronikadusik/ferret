@@ -8,12 +8,12 @@ import (
 	"strings"
 )
 
-type SystemStat struct {
-	Total  CPUStat
-	PerCPU []CPUStat
+type CPUStats struct {
+	Total  CPUTimes
+	PerCPU []CPUTimes
 }
 
-type CPUStat struct {
+type CPUTimes struct {
 	User    uint64
 	Nice    uint64
 	System  uint64
@@ -25,14 +25,14 @@ type CPUStat struct {
 }
 
 // ReadStat reads /proc/stat and returns filled SystemStat struct
-func ReadStat(procRoot string) (SystemStat, error) {
-	var cpuStat []CPUStat
-	var total CPUStat
+func ReadStat(procRoot string) (CPUStats, error) {
+	var cpuStat []CPUTimes
+	var total CPUTimes
 
 	statPath := filepath.Join(procRoot, "stat")
 	data, err := os.ReadFile(statPath)
 	if err != nil {
-		return SystemStat{}, err
+		return CPUStats{}, err
 	}
 
 	statStr := string(data)
@@ -46,50 +46,50 @@ func ReadStat(procRoot string) (SystemStat, error) {
 		fields := strings.Fields(line)
 
 		if len(fields) < 8 {
-			return SystemStat{}, errors.New("incorrect stat format")
+			return CPUStats{}, errors.New("incorrect stat format")
 		}
 
 		statUser, err := strconv.ParseUint(fields[1], 10, 64)
 		if err != nil {
-			return SystemStat{}, err
+			return CPUStats{}, err
 		}
 
 		statNice, err := strconv.ParseUint(fields[2], 10, 64)
 		if err != nil {
-			return SystemStat{}, err
+			return CPUStats{}, err
 		}
 
 		statSystem, err := strconv.ParseUint(fields[3], 10, 64)
 		if err != nil {
-			return SystemStat{}, err
+			return CPUStats{}, err
 		}
 
 		statIdle, err := strconv.ParseUint(fields[4], 10, 64)
 		if err != nil {
-			return SystemStat{}, err
+			return CPUStats{}, err
 		}
 
 		statIOWait, err := strconv.ParseUint(fields[5], 10, 64)
 		if err != nil {
-			return SystemStat{}, err
+			return CPUStats{}, err
 		}
 
 		statIRQ, err := strconv.ParseUint(fields[6], 10, 64)
 		if err != nil {
-			return SystemStat{}, err
+			return CPUStats{}, err
 		}
 
 		statSoftIRQ, err := strconv.ParseUint(fields[7], 10, 64)
 		if err != nil {
-			return SystemStat{}, err
+			return CPUStats{}, err
 		}
 
 		statSteal, err := strconv.ParseUint(fields[8], 10, 64)
 		if err != nil {
-			return SystemStat{}, err
+			return CPUStats{}, err
 		}
 
-		metrics := CPUStat{
+		metrics := CPUTimes{
 			User:    statUser,
 			Nice:    statNice,
 			System:  statSystem,
@@ -107,7 +107,7 @@ func ReadStat(procRoot string) (SystemStat, error) {
 		}
 	}
 
-	return SystemStat{
+	return CPUStats{
 		Total:  total,
 		PerCPU: cpuStat,
 	}, nil

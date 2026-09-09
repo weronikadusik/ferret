@@ -3,14 +3,14 @@ package main
 import "github.com/weronikadusik/ferret/procfs"
 
 // TotalTicks calculates the total system ticks across all CPU states for a given stat struct
-func TotalTicks(stat procfs.CPUStat) uint64 {
+func TotalTicks(stat procfs.CPUTimes) uint64 {
 	return stat.User + stat.Nice + stat.System + stat.Idle +
 		stat.IOWait + stat.IRQ + stat.SoftIRQ + stat.Steal
 }
 
 // CPUStatDelta returns the difference between two CPU samples
-func CPUStatDelta(before, after procfs.CPUStat) procfs.CPUStat {
-	return procfs.CPUStat{
+func CPUStatDelta(before, after procfs.CPUTimes) procfs.CPUTimes {
+	return procfs.CPUTimes{
 		User:    after.User - before.User,
 		Nice:    after.Nice - before.Nice,
 		System:  after.System - before.System,
@@ -22,8 +22,8 @@ func CPUStatDelta(before, after procfs.CPUStat) procfs.CPUStat {
 	}
 }
 
-// CPUUsage returns the average CPU utilisation percentage from a procfs.CPUStat containing cpu time deltas
-func CPUUsage(deltas procfs.CPUStat) float64 {
+// CPUUtilisation returns the average CPU utilisation percentage from a procfs.CPUTimes containing cpu time deltas
+func CPUUtilisation(deltas procfs.CPUTimes) float64 {
 	total := deltas.User + deltas.Nice + deltas.System + deltas.Idle + deltas.IOWait + deltas.IRQ + deltas.SoftIRQ + deltas.Steal
 	busy := deltas.User + deltas.Nice + deltas.System + deltas.IRQ + deltas.SoftIRQ + deltas.Steal
 

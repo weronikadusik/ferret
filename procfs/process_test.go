@@ -95,14 +95,14 @@ func TestReadStat(t *testing.T) {
 	tests := []struct {
 		name     string
 		procRoot string
-		want     SystemStat
+		want     CPUStats
 		wantErr  bool
 	}{
 		{
 			name:     "valid stat",
 			procRoot: "./testdata/proc_valid",
-			want: SystemStat{
-				Total: CPUStat{
+			want: CPUStats{
+				Total: CPUTimes{
 					User:    434667,
 					Nice:    2646,
 					System:  124574,
@@ -112,7 +112,7 @@ func TestReadStat(t *testing.T) {
 					SoftIRQ: 9612,
 					Steal:   0,
 				},
-				PerCPU: []CPUStat{
+				PerCPU: []CPUTimes{
 					{
 						User:    72398,
 						Nice:    440,

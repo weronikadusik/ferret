@@ -16,7 +16,12 @@ const procRoot = "/proc"
 
 type Snapshot struct {
 	Processes map[int]procfs.Process
-	CPUTimes  procfs.SystemStat
+	CPUStats  procfs.CPUStats
+}
+
+type CPUUsage struct {
+	Total  float64
+	PerCPU []float64
 }
 
 func readSnapshot() (Snapshot, error) {
@@ -25,14 +30,14 @@ func readSnapshot() (Snapshot, error) {
 		return Snapshot{}, err
 	}
 
-	CPUTimes, err := procfs.ReadStat(procRoot)
+	CPUStats, err := procfs.ReadStat(procRoot)
 	if err != nil {
 		return Snapshot{}, err
 	}
 
 	return Snapshot{
 		Processes: Processes,
-		CPUTimes:  CPUTimes,
+		CPUStats:  CPUStats,
 	}, nil
 }
 
@@ -66,6 +71,23 @@ func readProcesses() (map[int]procfs.Process, error) {
 	return processes, nil
 }
 
+func calculateSystemCPUUsage(before Snapshot, after Snapshot) CPUUsage {
+	deltas := CPUStatDelta(before.CPUStats.Total, after.CPUStats.Total)
+	cpuUsageTotal := CPUUtilisation(deltas)
+
+	cpuUsagePerCPU := make([]float64, len(after.CPUStats.PerCPU))
+	for i, cpu := range after.CPUStats.PerCPU {
+		cpuUsagePerCPU[i] = CPUUtilisation(
+			CPUStatDelta(before.CPUStats.PerCPU[i], cpu),
+		)
+	}
+
+	return CPUUsage{
+		Total:  cpuUsageTotal,
+		PerCPU: cpuUsagePerCPU,
+	}
+}
+
 func main() {
 	fmt.Println("Hi! I'm ferret 🦦")
 
@@ -81,17 +103,10 @@ func main() {
 		log.Fatalf("could not get final snapshot: %v", err)
 	}
 
-	deltas := CPUStatDelta(before.CPUTimes.Total, after.CPUTimes.Total)
+	cpuUsage := calculateSystemCPUUsage(before, after)
+
+	deltas := CPUStatDelta(before.CPUStats.Total, after.CPUStats.Total)
 	systemTicksDelta := TotalTicks(deltas)
-	cpuUsageTotal := CPUUsage(deltas)
-
-	cpuUsagePerCPU := make([]float64, len(after.CPUTimes.PerCPU))
-	for i, cpu := range after.CPUTimes.PerCPU {
-		cpuUsagePerCPU[i] = CPUUsage(
-			CPUStatDelta(before.CPUTimes.PerCPU[i], cpu),
-		)
-	}
-
 	cpuUsageByPID := make(map[int]float64, len(after.Processes))
 	for pid, process := range after.Processes {
 		start, exists := before.Processes[pid]
@@ -132,10 +147,10 @@ func main() {
 	fmt.Printf("%d Processes found\n\n", len(after.Processes))
 	fmt.Print("System CPU Usage:\n")
 
-	for i, cpuUsage := range cpuUsagePerCPU {
+	for i, cpuUsage := range cpuUsage.PerCPU {
 		fmt.Printf("\t├─ CPU %d: %.1f%%\n", i, cpuUsage)
 	}
-	fmt.Printf("\t└─ Total: %.1f%%\n\n", cpuUsageTotal)
+	fmt.Printf("\t└─ Total: %.1f%%\n\n", cpuUsage.Total)
 
 	fmt.Printf("System Memory Usage: %.1f/%.1f GB\n", KBtoGB(memoryUsage.InUseKB), KBtoGB(memoryUsage.TotalKB))
 	fmt.Printf("Memory Available: %.1f GB\n", KBtoGB(memoryUsage.AvailableKB))

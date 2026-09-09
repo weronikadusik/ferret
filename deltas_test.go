@@ -8,19 +8,19 @@ import (
 )
 
 func TestCPUStatDelta(t *testing.T) {
-	before := procfs.CPUStat{
+	before := procfs.CPUTimes{
 		User:   100,
 		System: 50,
 		Idle:   1000,
 	}
 
-	after := procfs.CPUStat{
+	after := procfs.CPUTimes{
 		User:   140,
 		System: 70,
 		Idle:   1200,
 	}
 
-	want := procfs.CPUStat{
+	want := procfs.CPUTimes{
 		User:   40,
 		System: 20,
 		Idle:   200,
@@ -32,7 +32,7 @@ func TestCPUStatDelta(t *testing.T) {
 }
 
 func TestCPUUsage(t *testing.T) {
-	deltas := procfs.CPUStat{
+	deltas := procfs.CPUTimes{
 		User:    30,
 		Nice:    10,
 		System:  30,
@@ -43,13 +43,13 @@ func TestCPUUsage(t *testing.T) {
 		Steal:   5,
 	}
 
-	got := CPUUsage(deltas)
+	got := CPUUtilisation(deltas)
 
 	require.Equal(t, 90.0, got)
 }
 
 func TestCPUUsageZero(t *testing.T) {
-	got := CPUUsage(procfs.CPUStat{})
+	got := CPUUtilisation(procfs.CPUTimes{})
 
 	require.Equal(t, 0.0, got)
 }
