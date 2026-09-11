@@ -7,9 +7,8 @@ type Process struct {
 	Priority int
 	Nice     int
 
-	PrivateKB uint64
-	VSZBytes  uint64
-	RSSBytes  uint64
+	VSZBytes uint64
+	RSSBytes uint64
 
 	UTimeTicks uint64
 	STimeTicks uint64
