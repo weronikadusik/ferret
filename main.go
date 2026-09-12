@@ -2,9 +2,11 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"syscall"
 	"time"
 
@@ -171,6 +173,9 @@ func printSystemMemoryUsage(memoryUsage procfs.MemInfo) {
 }
 
 func main() {
+	sortBy := flag.String("sort", "pid", "Sort process list by `pid`, `cpu`, or `memory`")
+	flag.Parse()
+
 	fmt.Println("Hi! I'm ferret 🦦")
 
 	before, err := readSnapshot()
@@ -197,6 +202,23 @@ func main() {
 	processesMetrics, err := getProcessMetrics(before, after, stablePIDs, cpuDelta)
 	if err != nil {
 		log.Fatalf("could not get process metrics: %v", err)
+	}
+
+	switch *sortBy {
+	case "pid":
+		sort.Slice(processesMetrics, func(i, j int) bool {
+			return processesMetrics[i].Process.PID < processesMetrics[j].Process.PID
+		})
+	case "cpu":
+		sort.Slice(processesMetrics, func(i, j int) bool {
+			return processesMetrics[i].CPUUsagePercent > processesMetrics[j].CPUUsagePercent
+		})
+	case "memory":
+		sort.Slice(processesMetrics, func(i, j int) bool {
+			return processesMetrics[i].PrivateKB > processesMetrics[j].PrivateKB
+		})
+	default:
+		log.Fatalf("invalid sort option: %q (valid: pid, cpu, memory)", *sortBy)
 	}
 
 	printProcesses(processesMetrics)
