@@ -18,12 +18,14 @@ const procRoot = "/proc"
 type ProcessMetrics struct {
 	Process         procfs.Process
 	CPUUsagePercent float64
+	DiskUsageBPerS  uint64
 	PrivateKB       uint64
 }
 
 type Snapshot struct {
-	Processes map[int]procfs.Process
-	CPUStats  procfs.CPUStats
+	Processes        map[int]procfs.Process
+	ProcessesIOUsage map[int]uint64
+	CPUStats         procfs.CPUStats
 }
 
 type CPUUsage struct {
@@ -52,28 +54,49 @@ func getStablePIDs(before, after Snapshot) []int {
 }
 
 func readSnapshot() (Snapshot, error) {
-	Processes, err := readProcesses()
+	pids, err := procfs.ListPIDs(procRoot)
 	if err != nil {
-		return Snapshot{}, err
+		return Snapshot{}, fmt.Errorf("listing PIDs: %w", err)
+	}
+
+	Processes, err := readProcesses(pids)
+	if err != nil {
+		return Snapshot{}, fmt.Errorf("gathering process info: %w", err)
+	}
+
+	ProcessesIOUsage, err := readProcessesIOUsage(pids)
+	if err != nil {
+		return Snapshot{}, fmt.Errorf("gathering process io info: %w", err)
 	}
 
 	CPUStats, err := procfs.ReadStat(procRoot)
 	if err != nil {
-		return Snapshot{}, err
+		return Snapshot{}, fmt.Errorf("gathering CPU usage statistics: %w", err)
 	}
 
 	return Snapshot{
-		Processes: Processes,
-		CPUStats:  CPUStats,
+		Processes:        Processes,
+		ProcessesIOUsage: ProcessesIOUsage,
+		CPUStats:         CPUStats,
 	}, nil
 }
 
-func readProcesses() (map[int]procfs.Process, error) {
-	pids, err := procfs.ListPIDs(procRoot)
-	if err != nil {
-		return nil, fmt.Errorf("listing PIDs: %w", err)
+func readProcessesIOUsage(pids []int) (map[int]uint64, error) {
+	processesIOUsage := make(map[int]uint64, len(pids))
+	for _, pid := range pids {
+		ioUsage, err := procfs.ReadProcessDiskUsage(procRoot, pid)
+		if err != nil {
+			if isSkippable(err) {
+				continue // process exited between reading proc directory and reading process-specific io file, or access denied
+			}
+			return nil, fmt.Errorf("reading stat for pid %d: %w", pid, err)
+		}
+		processesIOUsage[pid] = ioUsage
 	}
+	return processesIOUsage, nil
+}
 
+func readProcesses(pids []int) (map[int]procfs.Process, error) {
 	processes := make(map[int]procfs.Process, len(pids))
 	for _, pid := range pids {
 		proc, err := procfs.ReadProcessStat(procRoot, pid)
@@ -102,6 +125,7 @@ func getProcessMetrics(before, after Snapshot, stablePIDs []int, cpuDelta procfs
 		processesMetrics = append(processesMetrics, ProcessMetrics{
 			Process:         after.Processes[pid],
 			CPUUsagePercent: cpuUsageByPID(pid, before, after, systemTicksDelta),
+			DiskUsageBPerS:  diskUsageByPID(pid, before, after),
 			PrivateKB:       privateKB,
 		})
 	}
@@ -132,6 +156,16 @@ func cpuUsageByPID(pid int, before Snapshot, after Snapshot, systemTicksDelta ui
 	return (float64(procTicksDelta) / float64(systemTicksDelta)) * 100.0
 }
 
+func diskUsageByPID(pid int, before Snapshot, after Snapshot) uint64 {
+	afterUsage := after.ProcessesIOUsage[pid]
+	beforeUsage := before.ProcessesIOUsage[pid]
+
+	if afterUsage < beforeUsage {
+		return 0
+	}
+	return afterUsage - beforeUsage
+}
+
 func systemCPUUsage(before Snapshot, after Snapshot, cpuDelta procfs.CPUTimes) CPUUsage {
 	cpuUsagePerCPU := make([]float64, len(after.CPUStats.PerCPU))
 	for i, cpu := range after.CPUStats.PerCPU {
@@ -152,6 +186,7 @@ func printProcesses(metrics []ProcessMetrics) {
 		fmt.Printf("\t├─ State:%q  Priority:%d  Nice:%d\n", p.Process.State, p.Process.Priority, p.Process.Nice)
 		fmt.Printf("\t├─ Virtual memory size: %.1f MB  Resident Memory size: %.1f MB\n", BtoMB(p.Process.VSZBytes), BtoMB(p.Process.RSSBytes))
 		fmt.Printf("\t├─ Private memory usage: %.1f MB\n", KBtoMB(p.PrivateKB))
+		fmt.Printf("\t├─ Disk usage: %.1f MB/s\n", BtoMB(p.DiskUsageBPerS))
 		fmt.Printf("\t└─ CPU Usage: %.2f%%\n", p.CPUUsagePercent)
 	}
 
@@ -217,8 +252,12 @@ func main() {
 		sort.Slice(processesMetrics, func(i, j int) bool {
 			return processesMetrics[i].PrivateKB > processesMetrics[j].PrivateKB
 		})
+	case "disk":
+		sort.Slice(processesMetrics, func(i, j int) bool {
+			return processesMetrics[i].DiskUsageBPerS > processesMetrics[j].DiskUsageBPerS
+		})
 	default:
-		log.Fatalf("invalid sort option: %q (valid: pid, cpu, memory)", *sortBy)
+		log.Fatalf("invalid sort option: %q (valid: pid, cpu, memory, disk)", *sortBy)
 	}
 
 	printProcesses(processesMetrics)

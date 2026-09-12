@@ -12,6 +12,9 @@ ferret --sort=cpu
 
 # Sort process list by memory usage
 ferret --sort=memory
+
+# Sort process list by disk usage
+ferret --sort=disk
 ```
 
 > Temporary CLI flag — will move to interactive sorting once the TUI (bubbletea) lands.
