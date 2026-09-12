@@ -148,8 +148,8 @@ func printProcesses(metrics []ProcessMetrics) {
 	for _, p := range metrics {
 		fmt.Printf("Process %d: %s:\n", p.Process.PID, p.Process.Comm)
 		fmt.Printf("\t├─ State:%q  Priority:%d  Nice:%d\n", p.Process.State, p.Process.Priority, p.Process.Nice)
-		fmt.Printf("\t├─ Virtual memory size (B):%d  Resident Memory size (B):%d\n", p.Process.VSZBytes, p.Process.RSSBytes)
-		fmt.Printf("\t├─ Private memory usage: %d KB\n", p.PrivateKB)
+		fmt.Printf("\t├─ Virtual memory size: %.1f MB  Resident Memory size: %.1f MB\n", BtoMB(p.Process.VSZBytes), BtoMB(p.Process.RSSBytes))
+		fmt.Printf("\t├─ Private memory usage: %.1f MB\n", KBtoMB(p.PrivateKB))
 		fmt.Printf("\t└─ CPU Usage: %.2f%%\n", p.CPUUsagePercent)
 	}
 
