@@ -14,6 +14,7 @@ import (
 )
 
 const procRoot = "/proc"
+const sysRoot = "/"
 
 type ProcessMetrics struct {
 	Process         procfs.Process
@@ -26,6 +27,7 @@ type Snapshot struct {
 	Processes        map[int]procfs.Process
 	ProcessesIOUsage map[int]uint64
 	CPUStats         procfs.CPUStats
+	DiskStats        []procfs.DiskStats
 }
 
 type CPUUsage struct {
@@ -74,10 +76,16 @@ func readSnapshot() (Snapshot, error) {
 		return Snapshot{}, fmt.Errorf("gathering CPU usage statistics: %w", err)
 	}
 
+	DiskStats, err := procfs.ReadDiskStats(procRoot, sysRoot)
+	if err != nil {
+		return Snapshot{}, fmt.Errorf("gathering disk usage statistics: %w", err)
+	}
+
 	return Snapshot{
 		Processes:        Processes,
 		ProcessesIOUsage: ProcessesIOUsage,
 		CPUStats:         CPUStats,
+		DiskStats:        DiskStats,
 	}, nil
 }
 
@@ -180,6 +188,16 @@ func systemCPUUsage(before Snapshot, after Snapshot, cpuDelta procfs.CPUTimes) C
 	}
 }
 
+func systemDiskUsage(before Snapshot, after Snapshot) map[string]float64 {
+	diskUsages := make(map[string]float64)
+
+	for i, disk := range before.DiskStats {
+		diskUsages[disk.Name] = (float64(after.DiskStats[i].IOTime) - float64(disk.IOTime)) / 1000 * 100
+	}
+
+	return diskUsages
+}
+
 func printProcesses(metrics []ProcessMetrics) {
 	for _, p := range metrics {
 		fmt.Printf("Process %d: %s:\n", p.Process.PID, p.Process.Comm)
@@ -191,6 +209,20 @@ func printProcesses(metrics []ProcessMetrics) {
 	}
 
 	fmt.Printf("%d Processes found\n\n", len(metrics))
+}
+
+func printSystemDiskUsage(diskUsage map[string]float64) {
+	fmt.Print("System Disk Usage:\n")
+	disksAvailable := len(diskUsage)
+	i := 1
+	for name, usage := range diskUsage {
+		if i == disksAvailable {
+			fmt.Printf("\t└─ %s: %.1f%%\n\n", name, usage)
+		} else {
+			fmt.Printf("\t├─ %s: %.1f%%\n", name, usage)
+		}
+		i++
+	}
 }
 
 func printSystemCPUUsage(cpuUsage CPUUsage) {
@@ -233,6 +265,8 @@ func main() {
 		log.Fatalf("could not get memory usage info: %v", err)
 	}
 
+	diskUsage := systemDiskUsage(before, after)
+
 	stablePIDs := getStablePIDs(before, after)
 	processesMetrics, err := getProcessMetrics(before, after, stablePIDs, cpuDelta)
 	if err != nil {
@@ -261,6 +295,7 @@ func main() {
 	}
 
 	printProcesses(processesMetrics)
+	printSystemDiskUsage(diskUsage)
 	printSystemCPUUsage(cpuUsage)
 	printSystemMemoryUsage(memoryUsage)
 }
