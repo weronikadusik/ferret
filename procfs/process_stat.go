@@ -1,6 +1,7 @@
 package procfs
 
 import (
+	"bufio"
 	"errors"
 	"os"
 	"path/filepath"
@@ -11,12 +12,23 @@ import (
 // ReadProcessStat reads /proc/[pid]/stat and returns a Process
 func ReadProcessStat(procRoot string, pid int) (Process, error) {
 	statPath := filepath.Join(procRoot, strconv.Itoa(pid), "stat")
-	data, err := os.ReadFile(statPath)
+	file, err := os.Open(statPath)
 	if err != nil {
 		return Process{}, err
 	}
+	defer file.Close()
 
-	statStr := string(data)
+	scanner := bufio.NewScanner(file)
+
+	var statStr string
+
+	if scanner.Scan() {
+		statStr = scanner.Text()
+	}
+
+	if err := scanner.Err(); err != nil {
+		return Process{}, err
+	}
 
 	lParen := strings.IndexByte(statStr, '(')
 	rParen := strings.LastIndexByte(statStr, ')')

@@ -1,6 +1,7 @@
 package procfs
 
 import (
+	"bufio"
 	"errors"
 	"os"
 	"path/filepath"
@@ -30,20 +31,19 @@ func ReadStat(procRoot string) (CPUStats, error) {
 	var total CPUTimes
 
 	statPath := filepath.Join(procRoot, "stat")
-	data, err := os.ReadFile(statPath)
+	file, err := os.Open(statPath)
 	if err != nil {
 		return CPUStats{}, err
 	}
+	defer file.Close()
 
-	statStr := string(data)
-
-	lines := strings.Split(statStr, "\n")
-	for _, line := range lines {
-		if !strings.HasPrefix(line, "cpu") {
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		if !strings.HasPrefix(scanner.Text(), "cpu") {
 			break
 		}
 
-		fields := strings.Fields(line)
+		fields := strings.Fields(scanner.Text())
 
 		if len(fields) < 8 {
 			return CPUStats{}, errors.New("incorrect stat format")
@@ -105,6 +105,10 @@ func ReadStat(procRoot string) (CPUStats, error) {
 		} else {
 			cpuStat = append(cpuStat, metrics)
 		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return CPUStats{}, err
 	}
 
 	return CPUStats{
